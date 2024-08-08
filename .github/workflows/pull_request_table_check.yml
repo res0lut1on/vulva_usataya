@@ -27,8 +27,32 @@ jobs:
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       run: |
-        curl -X POST -H 'Content-type: application/json' --data '{
-          "text": "A PR with table-related changes has been opened!",
-          "username": "GitHub Actions Bot",
-          "icon_emoji": ":robot_face:"
-        }' $SLACK_WEBHOOK_URL
+        changed_files=$(git diff --name-only HEAD $(git merge-base HEAD origin/main) | grep 'table')
+        pr_title="${{ github.event.pull_request.title }}"
+        pr_number="${{ github.event.pull_request.number }}"
+        pr_user="${{ github.event.pull_request.user.login }}"
+        pr_user_avatar="${{ github.event.pull_request.user.avatar_url }}"
+        pr_url="${{ github.event.pull_request.html_url }}"
+
+        message=":robot_face: *GitHub Actions Bot*\n\n"
+        message+="*Pull Request:* <${pr_url}|#${pr_number} ${pr_title}>\n"
+        message+="*Author:* ${pr_user}\n"
+        message+="*Changed Files:*\n\`\`\`${changed_files}\`\`\`"
+
+        curl -X POST -H 'Content-type: application/json' --data "{
+          \"text\": \"A PR with table-related changes has been opened!\",
+          \"blocks\": [
+            {
+              \"type\": \"section\",
+              \"text\": {
+                \"type\": \"mrkdwn\",
+                \"text\": \"${message}\"
+              },
+              \"accessory\": {
+                \"type\": \"image\",
+                \"image_url\": \"${pr_user_avatar}\",
+                \"alt_text\": \"${pr_user}\"
+              }
+            }
+          ]
+        }" $SLACK_WEBHOOK_URL
