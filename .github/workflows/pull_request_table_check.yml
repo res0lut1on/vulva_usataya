@@ -16,60 +16,19 @@ jobs:
       id: table-check
       run: |
         git fetch origin main
-        base=$(git merge-base HEAD origin/main)
-        echo "Base commit: $base"
-        
-        changed_files=$(git diff --name-only HEAD $base | grep 'table' || true)
-        
-        echo "Changed files: $changed_files"
-        
-        if [ -z "$changed_files" ]; then
-          echo "No table files changed"
-          echo "::set-output name=has_table_files_changed::0"
-        else
-          echo "::set-output name=has_table_files_changed::1"
-        fi
+        git diff --name-only HEAD $(git merge-base HEAD origin/main) | grep 'table' || echo "No table files changed"
+
+    - name: Set has_table_files_changed output
+      id: set-output
+      run: echo "::set-output name=has_table_files_changed::$(git diff --name-only HEAD $(git merge-base HEAD origin/main) | grep -c 'table')"
 
     - name: Send Slack Notification
       if: steps.set-output.outputs.has_table_files_changed != '0'
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       run: |
-        changed_files=$(git diff --name-only HEAD $(git merge-base HEAD origin/main) | grep 'table')
-        
-        pr_title="${{ github.event.pull_request.title }}"
-        pr_number="${{ github.event.pull_request.number }}"
-        pr_user="${{ github.event.pull_request.user.login }}"
-        pr_user_avatar="${{ github.event.pull_request.user.avatar_url }}"
-        pr_url="${{ github.event.pull_request.html_url }}"
-
-        funny_names=("Mr. Robot" "Captain Code" "Debugging Ninja" "Code Monkey" "Dr. Bit")
-        funny_icons=(":robot_face:" ":sunglasses:" ":ghost:" ":monkey:" ":nerd_face:")
-
-        random_name=${funny_names[$RANDOM % ${#funny_names[@]}]}
-        random_icon=${funny_icons[$RANDOM % ${#funny_icons[@]}]}
-
-        message="${random_icon} *${random_name}*\n\n"
-        message+="*Pull Request:* <${pr_url}|#${pr_number} ${pr_title}>\n"
-        message+="*Author:* ${pr_user}\n"
-        message+="*Changed Files:*\n\`\`\`${changed_files}\`\`\`"
-
-        echo "Sending message to Slack: $message"
-
-        curl -X POST -H 'Content-type: application/json' --data "{
-          \"text\": \"A PR with table-related changes has been opened!\",
-          \"blocks\": [
-            {
-              \"type\": \"section\",
-              \"text\": {
-                \"type\": \"mrkdwn\",
-                \"text\": \"${message}\"
-              },
-              \"accessory\": {
-                \"type\": \"image\",
-                \"image_url\": \"${pr_user_avatar}\",
-                \"alt_text\": \"${pr_user}\"
-              }
-            }
-          ]
-        }" $SLACK_WEBHOOK_URL
+        curl -X POST -H 'Content-type: application/json' --data '{
+          "text": "A PR with table-related changes has been opened!",
+          "username": "GitHub Actions Bot",
+          "icon_emoji": ":robot_face:"
+        }' $SLACK_WEBHOOK_URL
