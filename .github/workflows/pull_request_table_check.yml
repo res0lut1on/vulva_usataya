@@ -16,11 +16,19 @@ jobs:
       id: table-check
       run: |
         git fetch origin main
-        git diff --name-only HEAD $(git merge-base HEAD origin/main) | grep 'table' || echo "No table files changed"
-
-    - name: Set has_table_files_changed output
-      id: set-output
-      run: echo "::set-output name=has_table_files_changed::$(git diff --name-only HEAD $(git merge-base HEAD origin/main) | grep -c 'table')"
+        base=$(git merge-base HEAD origin/main)
+        echo "Base commit: $base"
+        
+        changed_files=$(git diff --name-only HEAD $base | grep 'table' || true)
+        
+        echo "Changed files: $changed_files"
+        
+        if [ -z "$changed_files" ]; then
+          echo "No table files changed"
+          echo "::set-output name=has_table_files_changed::0"
+        else
+          echo "::set-output name=has_table_files_changed::1"
+        fi
 
     - name: Send Slack Notification
       if: steps.set-output.outputs.has_table_files_changed != '0'
@@ -28,6 +36,7 @@ jobs:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       run: |
         changed_files=$(git diff --name-only HEAD $(git merge-base HEAD origin/main) | grep 'table')
+        
         pr_title="${{ github.event.pull_request.title }}"
         pr_number="${{ github.event.pull_request.number }}"
         pr_user="${{ github.event.pull_request.user.login }}"
@@ -44,6 +53,8 @@ jobs:
         message+="*Pull Request:* <${pr_url}|#${pr_number} ${pr_title}>\n"
         message+="*Author:* ${pr_user}\n"
         message+="*Changed Files:*\n\`\`\`${changed_files}\`\`\`"
+
+        echo "Sending message to Slack: $message"
 
         curl -X POST -H 'Content-type: application/json' --data "{
           \"text\": \"A PR with table-related changes has been opened!\",
