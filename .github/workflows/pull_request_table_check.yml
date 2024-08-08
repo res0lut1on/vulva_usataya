@@ -20,9 +20,29 @@ jobs:
     - name: Determine base commit
       id: base
       run: |
+        echo "Fetching the main branch"
+        git fetch origin main
+    
+        # Проверяем, удалось ли загрузить ветку
+        if git rev-parse origin/main >/dev/null 2>&1; then
+          echo "Main branch fetched successfully"
+        else
+          echo "Failed to fetch main branch"
+          exit 1
+        fi
+    
+        echo "Finding base commit between HEAD and origin/main"
         base_commit=$(git merge-base HEAD origin/main)
+    
+        # Проверка, удалось ли найти базовый коммит
+        if [ -z "$base_commit" ]; then
+          echo "Failed to find base commit"
+          exit 1
+        fi
+    
         echo "Base commit: $base_commit"
         echo "::set-output name=base_commit::$base_commit"
+
 
     - name: Check for table files
       id: table-check
