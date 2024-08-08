@@ -1,0 +1,33 @@
+name: PR Table Check and Slack Notification
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  table-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Check for table files
+      id: table-check
+      run: |
+        git diff --name-only origin/main...HEAD | grep 'table' || echo "No table files changed"
+
+    - name: Set has_table_files_changed output
+      id: set-output
+      run: echo "::set-output name=has_table_files_changed::$(grep -c 'table' <<< $(git diff --name-only origin/main...HEAD))"
+
+    - name: Send Slack Notification
+      if: steps.set-output.outputs.has_table_files_changed != '0'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: |
+        curl -X POST -H 'Content-type: application/json' --data '{
+          "text": "A PR with table-related changes has been opened!",
+          "username": "GitHub Actions Bot",
+          "icon_emoji": ":robot_face:"
+        }' $SLACK_WEBHOOK_URL
