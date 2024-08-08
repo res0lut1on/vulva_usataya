@@ -15,14 +15,15 @@ jobs:
     - name: Check for table files
       id: table-check
       run: |
-        git diff --name-only origin/main...HEAD | grep 'table' || echo "No table files changed"
+        git fetch origin main
+        git diff --name-only HEAD $(git merge-base HEAD origin/main) | grep 'table' || echo "No table files changed"
 
     - name: Set has_table_files_changed output
       id: set-output
-      run: echo "::set-output name=has_table_files_changed::$(grep -c 'table' <<< $(git diff --name-only origin/main...HEAD))"
+      run: echo "::set-output name=has_table_files_changed::$(git diff --name-only HEAD $(git merge-base HEAD origin/main) | grep -c 'table')"
 
     - name: Send Slack Notification
-      if: steps.set-output.outputs.has_table_files_changed != '1'
+      if: steps.set-output.outputs.has_table_files_changed != '0'
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       run: |
