@@ -12,23 +12,102 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    - name: Fetch latest main
+      run: |
+        git fetch origin main
+        echo "Fetched latest main branch"
+
+    - name: Determine base commit
+      id: base
+      run: |
+        base_commit=$(git merge-base HEAD origin/main)
+        echo "Base commit: $base_commit"
+        echo "::set-output name=base_commit::$base_commit"
+
     - name: Check for table files
       id: table-check
       run: |
-        git fetch origin main
-        git diff --name-only HEAD $(git merge-base HEAD origin/main) | grep 'table' || echo "No table files changed"
+        # Используем базовый коммит для сравнения
+        changed_files=$(git diff --name-only HEAD ${{ steps.base.outputs.base_commit }})
+        echo "Changed files: $changed_files"
 
-    - name: Set has_table_files_changed output
-      id: set-output
-      run: echo "::set-output name=has_table_files_changed::$(git diff --name-only HEAD $(git merge-base HEAD origin/main) | grep -c 'table')"
+        # Проверяем наличие файлов, содержащих 'table'
+        table_files=$(echo "$changed_files" | grep 'table' || true)
+        echo "Table-related files: $table_files"
+
+        if [ -z "$table_files" ]; then
+          echo "No table files changed"
+          echo "::set-output name=has_table_files_changed::0"
+        else
+          echo "::set-output name=has_table_files_changed::1"
+        fi
+
+    - name: Log output
+      run: |
+        echo "Has table files changed: ${{ steps.table-check.outputs.has_table_files_changed }}"
+        echo "Changed files: $changed_files"
+        echo "Table files: $table_files"
 
     - name: Send Slack Notification
-      if: steps.set-output.outputs.has_table_files_changed != '0'
+      if: steps.table-check.outputs.has_table_files_changed != '0'
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       run: |
-        curl -X POST -H 'Content-type: application/json' --data '{
-          "text": "A PR with table-related changes has been opened!",
-          "username": "GitHub Actions Bot",
-          "icon_emoji": ":robot_face:"
-        }' $SLACK_WEBHOOK_URL
+        # Логирование всех переменных, используемых для отправки сообщения
+        echo "Sending Slack notification"
+        echo "SLACK_WEBHOOK_URL: $SLACK_WEBHOOK_URL"
+
+        pr_title="${{ github.event.pull_request.title }}"
+        pr_number="${{ github.event.pull_request.number }}"
+        pr_user="${{ github.event.pull_request.user.login }}"
+        pr_user_avatar="${{ github.event.pull_request.user.avatar_url }}"
+        pr_url="${{ github.event.pull_request.html_url }}"
+
+        echo "PR Title: $pr_title"
+        echo "PR Number: $pr_number"
+        echo "PR User: $pr_user"
+        echo "PR URL: $pr_url"
+
+        funny_names=("Mr. Robot" "Captain Code" "Debugging Ninja" "Code Monkey" "Dr. Bit")
+        funny_icons=(":robot_face:" ":sunglasses:" ":ghost:" ":monkey:" ":nerd_face:")
+
+        random_name=${funny_names[$RANDOM % ${#funny_names[@]}]}
+        random_icon=${funny_icons[$RANDOM % ${#funny_icons[@]}]}
+
+        echo "Random Name: $random_name"
+        echo "Random Icon: $random_icon"
+
+        message="${random_icon} *${random_name}*\n\n"
+        message+="*Pull Request:* <${pr_url}|#${pr_number} ${pr_title}>\n"
+        message+="*Author:* ${pr_user}\n"
+        message+="*Changed Files:*\n\`\`\`${table_files}\`\`\`"
+
+        echo "Slack message: $message"
+
+        # Отправка сообщения в Slack
+        response=$(curl -w "%{http_code}" -o /dev/null -s -X POST -H 'Content-type: application/json' --data "{
+          \"text\": \"A PR with table-related changes has been opened!\",
+          \"blocks\": [
+            {
+              \"type\": \"section\",
+              \"text\": {
+                \"type\": \"mrkdwn\",
+                \"text\": \"${message}\"
+              },
+              \"accessory\": {
+                \"type\": \"image\",
+                \"image_url\": \"${pr_user_avatar}\",
+                \"alt_text\": \"${pr_user}\"
+              }
+            }
+          ]
+        }" $SLACK_WEBHOOK_URL)
+
+        echo "Slack response code: $response"
+
+        if [ "$response" -ne 200 ]; then
+          echo "Failed to send Slack notification"
+          exit 1
+        else
+          echo "Slack notification sent successfully"
+        fi
