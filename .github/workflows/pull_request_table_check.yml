@@ -34,7 +34,13 @@ jobs:
         pr_user_avatar="${{ github.event.pull_request.user.avatar_url }}"
         pr_url="${{ github.event.pull_request.html_url }}"
 
-        message=":robot_face: *GitHub Actions Bot*\n\n"
+        funny_names=("Mr. Robot" "Captain Code" "Debugging Ninja" "Code Monkey" "Dr. Bit")
+        funny_icons=(":robot_face:" ":sunglasses:" ":ghost:" ":monkey:" ":nerd_face:")
+
+        random_name=${funny_names[$RANDOM % ${#funny_names[@]}]}
+        random_icon=${funny_icons[$RANDOM % ${#funny_icons[@]}]}
+
+        message="${random_icon} *${random_name}*\n\n"
         message+="*Pull Request:* <${pr_url}|#${pr_number} ${pr_title}>\n"
         message+="*Author:* ${pr_user}\n"
         message+="*Changed Files:*\n\`\`\`${changed_files}\`\`\`"
