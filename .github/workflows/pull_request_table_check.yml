@@ -22,7 +22,7 @@ jobs:
       run: echo "::set-output name=has_table_files_changed::$(grep -c 'table' <<< $(git diff --name-only origin/main...HEAD))"
 
     - name: Send Slack Notification
-      if: steps.set-output.outputs.has_table_files_changed != '0'
+      if: steps.set-output.outputs.has_table_files_changed != '1'
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       run: |
